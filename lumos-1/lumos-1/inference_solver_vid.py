@@ -758,6 +758,7 @@ class FlexARVidInferenceSolver:
             uncond_past_kv = transformers.DynamicCache() if use_kv_cache and (guidance_scale is not None and guidance_scale != 1) \
                              else None
             for frame_idx in range(start_frame, end_frame):
+                torch.cuda.empty_cache()
                 ### Mask token append function
                 prompt, prompt_mask = mask_append(
                     sequence               = prompt,                  # Tensor: Input sequence of tokens to which a masked frame will be appended.
