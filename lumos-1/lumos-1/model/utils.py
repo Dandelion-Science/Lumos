@@ -920,9 +920,10 @@ def create_attention_mask_predict_next(sequence, pad_id=128256, soi_id=128257, e
     mask_text[in_image_segment] = mask_text_image_bi[in_image_segment]
     # No token attends to padding tokens and padding tokens do not attend to any token
     if return_inverse_mask:
-        inverted_mask = 1.0 - mask_text.type(sequence.dtype)
+        _dtype = torch.bfloat16
+        inverted_mask = (1.0 - mask_text.to(_dtype))
         inverted_mask = inverted_mask.masked_fill(
-            inverted_mask.to(torch.bool), torch.iinfo(sequence.dtype).min
+            inverted_mask.to(torch.bool), torch.finfo(_dtype).min
         )
         return inverted_mask.unsqueeze(1)
     else:
@@ -983,9 +984,10 @@ def create_attention_mask_t2v(sequence, special_token, pad_id=0, rm_pad_in_image
     mask_text = mask_text_image_bi
     # No token attends to padding tokens and padding tokens do not attend to any token
     if return_inverse_mask:
-        inverted_mask = 1.0 - mask_text.type(sequence.dtype)
+        _dtype = torch.bfloat16
+        inverted_mask = (1.0 - mask_text.to(_dtype))
         inverted_mask = inverted_mask.masked_fill(
-            inverted_mask.to(torch.bool), torch.iinfo(sequence.dtype).min
+            inverted_mask.to(torch.bool), torch.finfo(_dtype).min
         )
         return inverted_mask.unsqueeze(1)
     else:
