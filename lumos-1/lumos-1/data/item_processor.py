@@ -135,7 +135,7 @@ class FlexARItemProcessor(MMConvItemProcessor):
 
     @staticmethod
     def get_n_grids_token(n_grids):
-        return f"<reserved{8800 + n_grids:05d}>"
+        return f"<reserved{8800 + int(n_grids):05d}>"
 
     def token2id(self, token: str) -> int:
         return self.tokenizer.tokenizer.vocab[token]
@@ -283,6 +283,7 @@ class FlexARItemProcessor2(MMConvItemProcessor):
         inference_mode=False,
         visual_tokenizer="Chameleon",
         cosmos_dtype=None,
+        device="cuda",
     ):  
         if inference_mode:
             transform = {"<|image|>": self.process_image, "<|partial_video|>": self.process_partial_video}
@@ -314,24 +315,25 @@ class FlexARItemProcessor2(MMConvItemProcessor):
         #  currently still use the original image tokenizer provided by Meta rather than transformers
         #  because the transformers implementation does not contain the vae decoder
         self.cosmos_dtype = cosmos_dtype
+        self.device = device
         self.visual_tokenizer = visual_tokenizer
         if visual_tokenizer == "Chameleon":
             self.chameleon_ori_vocab = chameleon_vae_ori.VocabInfo(
                 json.load(open("./ckpts/chameleon/tokenizer/text_tokenizer.json", encoding="utf8"))["model"]["vocab"]
             )
-            self.chameleon_ori_translation = chameleon_vae_ori.VocabTranslation(self.chameleon_ori_vocab, device="cuda")
+            self.chameleon_ori_translation = chameleon_vae_ori.VocabTranslation(self.chameleon_ori_vocab, device=device)
             self.chameleon_ori_image_tokenizer = chameleon_vae_ori.ImageTokenizer(
                 cfg_path="./ckpts/chameleon/tokenizer/vqgan.yaml",
                 ckpt_path="./ckpts/chameleon/tokenizer/vqgan.ckpt",
-                device="cuda",
+                device=device,
             )
             self.spatial_compression = 16
         elif visual_tokenizer in ["Cosmos-Tokenizer-DV4x8x8"]:
             self.chameleon_vid_vocab = chameleon_vae_ori.VocabInfo(
                 json.load(open("./ckpts/cosmos/tokenizer/text_tokenizer.json", encoding="utf8"))["model"]["vocab"]
             )
-            self.chameleon_ori_translation = chameleon_vae_ori.VocabTranslation(self.chameleon_vid_vocab, device="cuda")
-            
+            self.chameleon_ori_translation = chameleon_vae_ori.VocabTranslation(self.chameleon_vid_vocab, device=device)
+
             tokenizer_type = "DV" if "DV" in visual_tokenizer else "CV"
             temporal_compression, spatial_compression = visual_tokenizer.split('DV')[1].split('x')[:2]
             self.temporal_compression, self.spatial_compression = int(temporal_compression), int(spatial_compression)
@@ -343,8 +345,8 @@ class FlexARItemProcessor2(MMConvItemProcessor):
                 checkpoint_enc = 'ckpts/cosmos/Cosmos-Tokenizer-DV4x8x8/encoder.jit',
                 checkpoint_dec = 'ckpts/cosmos/Cosmos-Tokenizer-DV4x8x8/decoder.jit',
                 tokenizer_config = tokenizer_config,
-                device = 'cuda',
-                dtype = self.cosmos_dtype, # "bfloat16",
+                device = device,
+                dtype = self.cosmos_dtype,
             )
         else:
             assert False, f"Visual_tokenizer {visual_tokenizer} is not supported."
@@ -352,7 +354,7 @@ class FlexARItemProcessor2(MMConvItemProcessor):
 
     @staticmethod
     def get_n_grids_token(n_grids):
-        return f"<reserved{8800 + n_grids:05d}>"
+        return f"<reserved{8800 + int(n_grids):05d}>"
 
     def token2id(self, token: str) -> int:
         return self.tokenizer.tokenizer.vocab[token]
@@ -756,7 +758,7 @@ class FlexARItemProcessor2(MMConvItemProcessor):
         ### Create a look-up table for the dict, aiming for fast conversion.
         # Convert the dictionary to a PyTorch lookup table
         max_key = max(self.chameleon_ori_translation.bpe2vid.keys())  # Find the maximum key in the dictionary
-        bpe2vid_lookup_table = torch.full((max_key + 1,), -1, dtype=torch.int32, device="cuda")  # Initialize with a default value
+        bpe2vid_lookup_table = torch.full((max_key + 1,), -1, dtype=torch.int32, device=self.device)  # Initialize with a default value
         for key, value in self.chameleon_ori_translation.bpe2vid.items():
             bpe2vid_lookup_table[key] = value
         
@@ -770,7 +772,7 @@ class FlexARItemProcessor2(MMConvItemProcessor):
             latent_tokens.append(one_latent_token[2:])
 
         ### Eliminate the new_line_token
-        latent_tokens = torch.tensor(latent_tokens, device="cuda")
+        latent_tokens = torch.tensor(latent_tokens, device=self.device)
         num_latent_tokens = latent_tokens.shape[0]
         latent_tokens = latent_tokens.reshape(num_latent_tokens, h_latent_dim, w_latent_dim + 1)[:,:,:-1].contiguous()
         

@@ -305,6 +305,12 @@ class ChameleonAttention(nn.Module):
                 max_position_embeddings=self.max_position_embeddings,
                 base=self.rope_theta,
             )
+        elif "type" not in self.config.rope_scaling:
+            self.rotary_emb = ChameleonRotaryEmbedding(
+                self.head_dim,
+                max_position_embeddings=self.max_position_embeddings,
+                base=self.rope_theta,
+            )
         else:
             scaling_type = self.config.rope_scaling["type"]
             scaling_factor = self.config.rope_scaling["factor"]

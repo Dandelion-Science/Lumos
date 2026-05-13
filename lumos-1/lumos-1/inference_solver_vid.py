@@ -13,7 +13,8 @@ from PIL import Image
 import torch
 import transformers
 from transformers import GenerationConfig, TextStreamer
-from transformers.generation.logits_process import LogitsProcessor, LogitsProcessorList, LogitsWarper
+from transformers.generation.logits_process import LogitsProcessor, LogitsProcessorList
+LogitsWarper = LogitsProcessor  # removed in transformers >=4.50; both are identical base classes
 from transformers import ChameleonConfig
 
 # from data.item_processor import FlexARItemProcessor
@@ -211,6 +212,7 @@ class VideoLogitsProcessor(LogitsProcessor):
         patch_size=None,
         voc_size=None,
         visual_tokenizer="Chameleon",
+        device="cuda",
     ):
         # Token IDs that identify the start, end, and next line of an image section
         self.image_start_token_id = image_start_token_id
@@ -234,20 +236,20 @@ class VideoLogitsProcessor(LogitsProcessor):
         self.image_token_list = [i for i in range(4, 8195 + 1)]
         # `suppress_tokens` is a list of tokens not relevant for image data
         self.suppress_tokens = torch.tensor(
-            [x for x in self.vocab_list if x not in self.image_token_list], device="cuda"
+            [x for x in self.vocab_list if x not in self.image_token_list], device=device
         )
 
         # Create tensors used to mask scores of tokens not needed in the current generation context
-        self.vocab_tensor = torch.arange(voc_size, device="cuda")
+        self.vocab_tensor = torch.arange(voc_size, device=device)
         # Mask used to suppress non-image tokens in image generation
         self.suppress_token_mask = torch.isin(self.vocab_tensor, self.suppress_tokens)
         # Mask used to force the new line token
         self.new_line_force_token_mask = torch.isin(
-            self.vocab_tensor, torch.tensor([self.image_next_line_token_id], device="cuda")
+            self.vocab_tensor, torch.tensor([self.image_next_line_token_id], device=device)
         )
         # Mask used to force the end-of-image token
         self.eos_image_force_token_mask = torch.isin(
-            self.vocab_tensor, torch.tensor([self.image_end_token_id], device="cuda")
+            self.vocab_tensor, torch.tensor([self.image_end_token_id], device=device)
         )
 
         self.visual_tokenizer = visual_tokenizer
@@ -256,7 +258,7 @@ class VideoLogitsProcessor(LogitsProcessor):
             self.cosmos_video_token_list = [i for i in range(65536, 129536)]
             # `suppress_cosmos_video_tokens` is a list of tokens not relevant for cosmos video data
             self.suppress_cosmos_video_tokens = torch.tensor(
-                [x for x in self.vocab_list if x not in self.cosmos_video_token_list], device="cuda"
+                [x for x in self.vocab_list if x not in self.cosmos_video_token_list], device=device
             )
             # Mask used to suppress non-cosmos video tokens in video generation
             self.suppress_cosmos_video_token_mask = torch.isin(self.vocab_tensor, self.suppress_cosmos_video_tokens)
@@ -501,25 +503,27 @@ class FlexARVidInferenceSolver:
 
         return parser
 
-    def __init__(self, model_path, precision, target_fps, duration, visual_tokenizer="Chameleon", vae_st_compress=None, target_size=512):
+    def __init__(self, model_path, precision, target_fps, duration, visual_tokenizer="Chameleon", vae_st_compress=None, target_size=512, device="cuda"):
         self.dtype = {"bf16": torch.bfloat16, "fp16": torch.float16, "fp32": torch.float32}[precision]
+        self.device = device
 
         ### Model init with pre-trained weights.
         # self.model = ChameleonForConditionalGeneration.from_pretrained(
         self.model = ChameleonMMRoPEForConditionalGeneration.from_pretrained(
             model_path,
             torch_dtype=self.dtype,
-            device_map="cuda",
+            device_map=device,
         )
 
         # self.item_processor = FlexARItemProcessor(target_size=target_size)
         self.item_processor = FlexARItemProcessor2(
-            target_size=target_size, 
-            target_fps=target_fps, 
+            target_size=target_size,
+            target_fps=target_fps,
             duration=duration,
             inference_mode=True,
             visual_tokenizer=visual_tokenizer,
             cosmos_dtype=self.dtype if "Cosmos-Tokenizer" in visual_tokenizer else None,
+            device=device,
         )
 
         self.vae_st_compress = vae_st_compress # [16, 1] for Chameleon
@@ -1237,6 +1241,7 @@ class FlexARVidInferenceSolver:
             patch_size=32,
             voc_size=self.model.config.vocab_size,
             visual_tokenizer=self.visual_tokenizer,
+            device=self.device,
         )
 
         topk_processor = InterleavedTopKLogitsWarper(
