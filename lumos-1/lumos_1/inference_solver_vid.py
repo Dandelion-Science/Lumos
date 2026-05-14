@@ -503,7 +503,7 @@ class FlexARVidInferenceSolver:
 
         return parser
 
-    def __init__(self, model_path, precision, target_fps, duration, visual_tokenizer="Chameleon", vae_st_compress=None, target_size=512, device="cuda"):
+    def __init__(self, model_path, precision, target_fps, duration, visual_tokenizer="Chameleon", vae_st_compress=None, target_size=512, cosmos_tokenizer_dir=None, device="cuda"):
         self.dtype = {"bf16": torch.bfloat16, "fp16": torch.float16, "fp32": torch.float32}[precision]
         self.device = device
 
@@ -523,6 +523,7 @@ class FlexARVidInferenceSolver:
             inference_mode=True,
             visual_tokenizer=visual_tokenizer,
             cosmos_dtype=self.dtype if "Cosmos-Tokenizer" in visual_tokenizer else None,
+            cosmos_tokenizer_dir=cosmos_tokenizer_dir,
             device=device,
         )
 

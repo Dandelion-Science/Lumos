@@ -283,8 +283,9 @@ class FlexARItemProcessor2(MMConvItemProcessor):
         inference_mode=False,
         visual_tokenizer="Chameleon",
         cosmos_dtype=None,
+        cosmos_tokenizer_dir=None,
         device="cuda",
-    ):  
+    ):
         if inference_mode:
             transform = {"<|image|>": self.process_image, "<|partial_video|>": self.process_partial_video}
             media_symbols = ["<|image|>", "<|partial_video|>"] 
@@ -329,8 +330,14 @@ class FlexARItemProcessor2(MMConvItemProcessor):
             )
             self.spatial_compression = 16
         elif visual_tokenizer in ["Cosmos-Tokenizer-DV4x8x8"]:
+            if cosmos_tokenizer_dir is None:
+                raise ValueError(
+                    "cosmos_tokenizer_dir must be set when using Cosmos-Tokenizer. "
+                    "Pass the path to the Cosmos-Tokenizer-DV4x8x8 weights directory."
+                )
+            import os as _os
             self.chameleon_vid_vocab = chameleon_vae_ori.VocabInfo(
-                json.load(open("./ckpts/cosmos/tokenizer/text_tokenizer.json", encoding="utf8"))["model"]["vocab"]
+                json.load(open(_os.path.join(cosmos_tokenizer_dir, "text_tokenizer.json"), encoding="utf8"))["model"]["vocab"]
             )
             self.chameleon_ori_translation = chameleon_vae_ori.VocabTranslation(self.chameleon_vid_vocab, device=device)
 
@@ -342,8 +349,8 @@ class FlexARItemProcessor2(MMConvItemProcessor):
             tokenizer_config.update(dict(temporal_compression=self.temporal_compression))
             self.cosmos_visual_tokenizer = ExtendedCausalVideoTokenizer(
                 checkpoint = None,
-                checkpoint_enc = 'ckpts/cosmos/Cosmos-Tokenizer-DV4x8x8/encoder.jit',
-                checkpoint_dec = 'ckpts/cosmos/Cosmos-Tokenizer-DV4x8x8/decoder.jit',
+                checkpoint_enc = _os.path.join(cosmos_tokenizer_dir, "encoder.jit"),
+                checkpoint_dec = _os.path.join(cosmos_tokenizer_dir, "decoder.jit"),
                 tokenizer_config = tokenizer_config,
                 device = device,
                 dtype = self.cosmos_dtype,
